@@ -10,9 +10,15 @@ def init_db(db_name="alerts.db"):
             timestamp TEXT,
             src_ip TEXT,
             attack_type TEXT,
-            message TEXT
+            message TEXT,
+            status TEXT DEFAULT 'new'
         )
     ''')
+    # 2. (Optional) Try to add the status column if not present (will error if already exists, so catch it)
+    try:
+        c.execute("ALTER TABLE alerts ADD COLUMN status TEXT DEFAULT 'new'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -34,14 +40,25 @@ def fetch_alerts(db_name="alerts.db"):
     conn.close()
     return rows
 
-def upgrade_db(db_name="alerts.db"):
-    conn = sqlite3.connect(db_name)
+def upgrade_db():
+    conn = sqlite3.connect("alerts.db")
     c = conn.cursor()
-    # Add status column if it doesn't exist
-    c.execute("PRAGMA table_info(alerts)")
-    columns = [col[1] for col in c.fetchall()]
-    if "status" not in columns:
+    # 1. Create the alerts table if it doesn't exist
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            src_ip TEXT,
+            attack_type TEXT,
+            message TEXT,
+            status TEXT DEFAULT 'new'
+        )
+    """)
+    # 2. (Optional) Try to add the status column if not present (will error if already exists, so catch it)
+    try:
         c.execute("ALTER TABLE alerts ADD COLUMN status TEXT DEFAULT 'new'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     conn.close()
 

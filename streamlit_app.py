@@ -136,20 +136,25 @@ if st.session_state["page"] == "alerts":
         for date, group in sorted(filtered_df.groupby('date_only'), key=lambda x: x[0], reverse=True):
             with st.expander(f"{date}", expanded=(date == today)):
                 for idx, row in group.iterrows():
-                    cols = st.columns([2, 2, 2, 2, 3, 2, 2])
+                    cols = st.columns([2, 2, 2, 2, 2, 3, 2])
                     cols[0].write(row['timestamp'])
                     cols[1].write(row['src_ip'])
                     cols[2].write(row['attack_type'])
                     cols[3].write(row['message'])
                     cols[4].write(row['status'])
-                    if cols[5].button("Mark Reviewed    ", key=f"reviewed_{row['id']}"):
-                        update_alert_status(row['id'], "reviewed")
-                        st.success("Status updated! Please refresh the page to see changes.")
-                        st.stop()
-                    if cols[6].button("Mark False Positive   ", key=f"fp_{row['id']}"):
-                        update_alert_status(row['id'], "false positive")
-                        st.success("Status updated! Please refresh the page to see changes.")
-                        st.stop()
+                    status_options = ["new", "reviewed", "false positive", "important", "investigating"]
+                    current_status = row['status'] if row['status'] in status_options else "new"
+                    new_status = cols[5].selectbox(
+                        "Set Status",
+                        status_options,
+                        index=status_options.index(current_status),
+                        key=f"status_{row['id']}"
+                    )
+                    if cols[6].button("Update", key=f"update_{row['id']}"):
+                        if new_status != row['status']:
+                            update_alert_status(row['id'], new_status)
+                            st.success("Status updated! Please refresh the page to see changes.")
+                            st.stop()
                     st.markdown("---")
     else:
         st.info("No alerts detected yet.")
