@@ -79,10 +79,10 @@ if not df.empty:
 else:
     start_date, end_date = None, None
 
-# (Optional) Search box
+
 search_term = st.sidebar.text_input("Search (IP, message, etc.)")
 
-# (Optional) Reset filters button
+
 if st.sidebar.button("Reset Filters"):
     # Reset all filters by clearing session state and showing a message
     st.session_state.clear()
