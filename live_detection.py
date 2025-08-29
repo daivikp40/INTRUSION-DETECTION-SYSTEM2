@@ -4,6 +4,8 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from database import init_db, insert_alert
 import time
+import requests
+import geoip2.database
 
 BRUTE_FORCE_THRESHOLD = 2
 PORT_SCAN_THRESHOLD = 2
@@ -33,7 +35,8 @@ def detect_brute_force(ip):
             times[-1].strftime("%Y-%m-%d %H:%M:%S"),
             ip,
             "Brute Force (Live)",
-            f"{BRUTE_FORCE_THRESHOLD}+ SSH SYNs in {BRUTE_FORCE_WINDOW}."
+            f"{BRUTE_FORCE_THRESHOLD}+ SSH SYNs in {BRUTE_FORCE_WINDOW}.",
+            get_geolocation(ip)  # <-- Add this argument
         )
         alerted_bruteforce.add(ip)
 
@@ -42,14 +45,44 @@ def detect_port_scan(ip):
     while attempts and (datetime.now() - attempts[0][0]) > PORT_SCAN_WINDOW:
         attempts.popleft()
     ports = set(port for _, port in attempts)
+    times = [ts for ts, _ in attempts]
+
     if len(ports) >= PORT_SCAN_THRESHOLD and ip not in alerted_portscan:
-        insert_alert(
-            attempts[-1][0].strftime("%Y-%m-%d %H:%M:%S"),
-            ip,
-            "Port Scan (Live)",
-            f"Port scan: {len(ports)} ports in {PORT_SCAN_WINDOW}."
-        )
+        if is_suspicious_port_scan(ip, ports, times):
+            insert_alert(
+                times[-1].strftime("%Y-%m-%d %H:%M:%S"),
+                ip,
+                "Port Scan (Live)",
+                f"Suspicious port scan: {len(ports)} ports in {PORT_SCAN_WINDOW}",
+                get_geolocation(ip)  # <-- Add this argument
+            )
+        else:
+            insert_alert(
+                times[-1].strftime("%Y-%m-%d %H:%M:%S"),
+                ip,
+                "Port Scan (Benign)",
+                f"Low-risk scan: {len(ports)} ports in {PORT_SCAN_WINDOW}",
+                get_geolocation(ip)  # <-- Add this argument
+            )
         alerted_portscan.add(ip)
+
+
+def is_suspicious_port_scan(ip, ports, timestamps):
+    # Case 1: Sensitive ports are scanned
+    SENSITIVE_PORTS = {22, 3306, 3389, 5432, 1521, 8080, 5900}
+    if any(port in SENSITIVE_PORTS for port in ports):
+        return True
+
+    # Case 2: Too many ports scanned in < 60s
+    if len(ports) >= 10 and (timestamps[-1] - timestamps[0]).total_seconds() < 60:
+        return True
+
+    # Case 3: External IP (not localhost or internal)
+    if not ip.startswith("192.168.") and not ip.startswith("127."):
+        return True
+
+    return False
+
 
 # For SYN detection (works for both string and int flags)
 def is_syn(flags):
@@ -67,6 +100,9 @@ def process_packet(pkt):
         timestamp = datetime.now()
         print(f"Packet: src={src_ip}, dst_ip={dst_ip}, dst_port={dst_port}, flags={flags}")
 
+        geo = get_geolocation(src_ip)
+        print(f"GeoIP for {src_ip}: {geo}")
+
         # Brute force: SSH SYN packets (port 22)
         if dst_port == 22 and is_syn(flags):
             failed_logins[src_ip].append(timestamp)
@@ -80,14 +116,14 @@ def process_packet(pkt):
         # 1. DoS Attempt Detection (high SYN rate from one IP)
         if is_syn(flags):
             SYN_COUNTS[src_ip].append(now)
-            # Remove old SYNs
             SYN_COUNTS[src_ip] = [t for t in SYN_COUNTS[src_ip] if now - t < DOS_WINDOW]
             if len(SYN_COUNTS[src_ip]) >= DOS_THRESHOLD:
                 insert_alert(
                     timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                     src_ip,
                     "DoS Attempt (Live)",
-                    f"{len(SYN_COUNTS[src_ip])} SYNs in {DOS_WINDOW} seconds"
+                    f"{len(SYN_COUNTS[src_ip])} SYNs in {DOS_WINDOW} seconds",
+                    geo
                 )
                 SYN_COUNTS[src_ip].clear()  # Avoid duplicate alerts
 
@@ -97,7 +133,8 @@ def process_packet(pkt):
                 timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 src_ip,
                 "Unauthorized Access Attempt",
-                f"Attempted access to restricted port {dst_port} on {dst_ip}"
+                f"Attempted access to restricted port {dst_port} on {dst_ip} | {geo}",
+                geo  # <-- Already correct
             )
 
         # 10. Port Sweep Detection (one IP scans many ports across multiple hosts)
@@ -110,9 +147,20 @@ def process_packet(pkt):
                     timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                     src_ip,
                     "Port Sweep Detected",
-                    f"Scanned {PORT_SWEEP_THRESHOLD}+ ports on {len(sweep_hosts)} hosts"
+                    f"Scanned {PORT_SWEEP_THRESHOLD}+ ports on {len(sweep_hosts)} hosts | {geo}"
                 )
                 PORT_SWEEP[src_ip].clear()  # Avoid duplicate alerts
+
+def get_geolocation(ip):
+    try:
+        reader = geoip2.database.Reader('GeoLite2-City.mmdb')
+        response = reader.city(ip)
+        country = response.country.name if response.country.name else "Unknown"
+        city = response.city.name if response.city.name else "Unknown"
+        reader.close()
+        return f"{country} ({city})"
+    except Exception:
+        return "Unknown"
 
 def main():
     init_db()

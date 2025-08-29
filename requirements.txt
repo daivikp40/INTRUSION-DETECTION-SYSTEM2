@@ -4,3 +4,5 @@ matplotlib
 scapy
 xlsxwriter
 plotly
+streamlit-autorefresh
+streamlit-js-eval
