@@ -12,19 +12,52 @@ PORT_SCAN_THRESHOLD = 2
 BRUTE_FORCE_WINDOW = timedelta(minutes=2)
 PORT_SCAN_WINDOW = timedelta(minutes=1)
 
-failed_logins = defaultdict(deque)  # {ip: deque([timestamps])}
-port_scans = defaultdict(deque)     # {ip: deque([(timestamp, port)])}
+failed_logins = defaultdict(deque)  
+port_scans = defaultdict(deque)     
 alerted_bruteforce = set()
 alerted_portscan = set()
 
-# --- Detection State ---
-SYN_COUNTS = defaultdict(list)  # For DoS detection: {ip: [timestamps]}
-PORT_SWEEP = defaultdict(lambda: defaultdict(set))  # {src_ip: {dst_ip: set(ports)}}
-RESTRICTED_PORTS = {3389, 3306, 5432, 1521, 8080, 5900, 21, 25, 110}  # Add more as needed
 
-DOS_THRESHOLD = 100  # SYNs per minute from one IP
-PORT_SWEEP_THRESHOLD = 10  # Ports scanned on multiple hosts
-DOS_WINDOW = 60  # seconds
+SYN_COUNTS = defaultdict(list)  
+PORT_SWEEP = defaultdict(lambda: defaultdict(set)) 
+
+RESTRICTED_PORTS = {
+    3389,   # Remote Desktop Protocol (RDP)
+    3306,   # MySQL Database
+    5432,   # PostgreSQL Database
+    1521,   # Oracle Database
+    8080,   # Alternate HTTP/Web
+    5900,   # VNC Remote Desktop
+    21,     # FTP
+    25,     # SMTP Email
+    110,    # POP3 Email
+    23,     # Telnet
+    445,    # Microsoft-DS (SMB file sharing)
+    135,    # Microsoft RPC
+    139,    # NetBIOS Session Service
+    1433,   # Microsoft SQL Server
+    6379,   # Redis
+    27017,  # MongoDB
+    22,     # SSH (already monitored for brute force)
+    53,     # DNS
+    80,     # HTTP (Web)
+    443,    # HTTPS (Secure Web)
+    5000,   # Flask/Dev Web
+    8000,   # Alternate Web
+    9200,   # Elasticsearch
+    25,     # SMTP
+    587,    # SMTP (Submission)
+    465,    # SMTP (Secure)
+    995,    # POP3S (Secure)
+    993,    # IMAPS (Secure)
+    1723,   # PPTP VPN
+    1194,   # OpenVPN
+    8888,   # Alternate Web/Proxy
+}
+
+DOS_THRESHOLD = 100  
+PORT_SWEEP_THRESHOLD = 10  
+DOS_WINDOW = 60  
 
 def detect_brute_force(ip):
     times = failed_logins[ip]
@@ -36,7 +69,7 @@ def detect_brute_force(ip):
             ip,
             "Brute Force (Live)",
             f"{BRUTE_FORCE_THRESHOLD}+ SSH SYNs in {BRUTE_FORCE_WINDOW}.",
-            get_geolocation(ip)  # <-- Add this argument
+            get_geolocation(ip)  
         )
         alerted_bruteforce.add(ip)
 
@@ -54,7 +87,7 @@ def detect_port_scan(ip):
                 ip,
                 "Port Scan (Live)",
                 f"Suspicious port scan: {len(ports)} ports in {PORT_SCAN_WINDOW}",
-                get_geolocation(ip)  # <-- Add this argument
+                get_geolocation(ip)  
             )
         else:
             insert_alert(
@@ -62,31 +95,27 @@ def detect_port_scan(ip):
                 ip,
                 "Port Scan (Benign)",
                 f"Low-risk scan: {len(ports)} ports in {PORT_SCAN_WINDOW}",
-                get_geolocation(ip)  # <-- Add this argument
+                get_geolocation(ip)  
             )
         alerted_portscan.add(ip)
 
 
 def is_suspicious_port_scan(ip, ports, timestamps):
-    # Case 1: Sensitive ports are scanned
+
     SENSITIVE_PORTS = {22, 3306, 3389, 5432, 1521, 8080, 5900}
     if any(port in SENSITIVE_PORTS for port in ports):
         return True
 
-    # Case 2: Too many ports scanned in < 60s
     if len(ports) >= 10 and (timestamps[-1] - timestamps[0]).total_seconds() < 60:
         return True
 
-    # Case 3: External IP (not localhost or internal)
     if not ip.startswith("192.168.") and not ip.startswith("127."):
         return True
 
     return False
 
 
-# For SYN detection (works for both string and int flags)
 def is_syn(flags):
-    # Handles both string and int representations
     return (flags == 'S') or (flags == 0x02) or (str(flags) == 'S') or (int(flags) & 0x02)
 
 def process_packet(pkt):
@@ -127,7 +156,7 @@ def process_packet(pkt):
                 )
                 SYN_COUNTS[src_ip].clear()  # Avoid duplicate alerts
 
-        # 4. Unauthorized Access Attempt (restricted ports)
+        # 2. Unauthorized Access Attempt (restricted ports)
         if dst_port in RESTRICTED_PORTS:
             insert_alert(
                 timestamp.strftime("%Y-%m-%d %H:%M:%S"),
@@ -137,7 +166,7 @@ def process_packet(pkt):
                 geo  # <-- Already correct
             )
 
-        # 10. Port Sweep Detection (one IP scans many ports across multiple hosts)
+        # 3. Port Sweep Detection (one IP scans many ports across multiple hosts)
         if is_syn(flags):
             PORT_SWEEP[src_ip][dst_ip].add(dst_port)
             # Count how many hosts have >= PORT_SWEEP_THRESHOLD ports scanned
