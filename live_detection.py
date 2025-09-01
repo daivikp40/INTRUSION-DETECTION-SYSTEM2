@@ -21,38 +21,42 @@ alerted_portscan = set()
 SYN_COUNTS = defaultdict(list)  
 PORT_SWEEP = defaultdict(lambda: defaultdict(set)) 
 
-RESTRICTED_PORTS = {
-    3389,   # Remote Desktop Protocol (RDP)
-    3306,   # MySQL Database
-    5432,   # PostgreSQL Database
-    1521,   # Oracle Database
-    8080,   # Alternate HTTP/Web
+# Highly sensitive ports for suspicious scan detection (most targeted for remote access, admin, and web exploits)
+SENSITIVE_PORTS = {
+    22,     # SSH
+    3389,   # RDP
     5900,   # VNC Remote Desktop
-    21,     # FTP
-    25,     # SMTP Email
-    110,    # POP3 Email
-    23,     # Telnet
-    445,    # Microsoft-DS (SMB file sharing)
-    135,    # Microsoft RPC
-    139,    # NetBIOS Session Service
-    1433,   # Microsoft SQL Server
+    1433,   # MS SQL Server
+    3306,   # MySQL
+    5432,   # PostgreSQL
+    1521,   # Oracle DB
     6379,   # Redis
     27017,  # MongoDB
-    22,     # SSH (already monitored for brute force)
+    21,     # FTP
+    23,     # Telnet
+    445,    # SMB file sharing
+    8080,   # Alternate HTTP/Web
+    8000,   # Alternate Web
+    8888,   # Alternate Web/Proxy
+    9200,   # Elasticsearch
+}
+
+# Other important/restricted ports for unauthorized access attempts (email, VPN, DNS, etc.)
+RESTRICTED_PORTS = {
+    25,     # SMTP Email
+    110,    # POP3 Email
+    135,    # Microsoft RPC
+    139,    # NetBIOS Session Service
     53,     # DNS
     80,     # HTTP (Web)
     443,    # HTTPS (Secure Web)
     5000,   # Flask/Dev Web
-    8000,   # Alternate Web
-    9200,   # Elasticsearch
-    25,     # SMTP
     587,    # SMTP (Submission)
     465,    # SMTP (Secure)
     995,    # POP3S (Secure)
     993,    # IMAPS (Secure)
     1723,   # PPTP VPN
     1194,   # OpenVPN
-    8888,   # Alternate Web/Proxy
 }
 
 DOS_THRESHOLD = 100  
@@ -101,8 +105,7 @@ def detect_port_scan(ip):
 
 
 def is_suspicious_port_scan(ip, ports, timestamps):
-
-    SENSITIVE_PORTS = {22, 3306, 3389, 5432, 1521, 8080, 5900}
+    # Use the new SENSITIVE_PORTS set
     if any(port in SENSITIVE_PORTS for port in ports):
         return True
 
