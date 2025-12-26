@@ -21,7 +21,6 @@ alerted_portscan = set()
 SYN_COUNTS = defaultdict(list)  
 PORT_SWEEP = defaultdict(lambda: defaultdict(set)) 
 
-# Highly sensitive ports for suspicious scan detection (most targeted for remote access, admin, and web exploits)
 SENSITIVE_PORTS = {
     22,     # SSH
     3389,   # RDP
@@ -41,7 +40,6 @@ SENSITIVE_PORTS = {
     9200,   # Elasticsearch
 }
 
-# Other important/restricted ports for unauthorized access attempts (email, VPN, DNS, etc.)
 RESTRICTED_PORTS = {
     25,     # SMTP Email
     110,    # POP3 Email
