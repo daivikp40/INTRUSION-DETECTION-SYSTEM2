@@ -1,8 +1,9 @@
+scapy
+requests
+geoip2
 streamlit
 pandas
-matplotlib
-scapy
-xlsxwriter
-plotly
 streamlit-autorefresh
-streamlit-js-eval
+streamlit_js_eval
+scikit-learn
+plotly
