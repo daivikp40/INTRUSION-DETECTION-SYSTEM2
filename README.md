@@ -1,6 +1,6 @@
 # INTRUSION-DETECTION-SYSTEM2
 
-Gemini said
+
 This project is a Real-Time Intrusion Detection System (IDS) designed to monitor live network traffic for threats such as brute force SSH attempts and port scans. It features an interactive Streamlit dashboard for managing alerts, visualizing attack trends, and identifying the geolocation of attackers.
 
 🚀 Key Features
